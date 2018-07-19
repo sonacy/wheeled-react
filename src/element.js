@@ -18,11 +18,13 @@ class ReactElement{
 }
 
 export function createElement(type, config, children) {
-  let key = config.key ? '' + config.key : null
-  let ref = config.ref || null
+  let key = null
+  let ref = null
   const props = {}
   let propName
   if (config != null) {
+    key = config.key ? '' + config.key : null
+    ref = config.ref || null
     for(propName in config) {
       if (config.hasOwnProperty(propName) && !RESERVED_PROPS.hasOwnProperty(propName)) {
         props[propName] = config[propName]
