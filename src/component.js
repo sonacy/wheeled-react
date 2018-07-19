@@ -7,11 +7,10 @@ class Component {
     this.props = props
     this.context = context
     this.refs = emptyObject
-    // TODO ReactNoopUpdateQueue
     this.updater = updater || ReactNoopUpdateQueue
   }
 
-  isReactComponent = {}
+  isReactComponent() {}
 
   setState(partialState, callback) {
     this.updater.enqueueSetState(this, partialState, callback, 'setState')
