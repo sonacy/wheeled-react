@@ -1,5 +1,5 @@
 import { precacheFiberNode, updateFiberProps } from './dom-component-tree'
-import { setInitialProperties } from './dom-fiber-component'
+import { setInitialProperties, updateProperties } from './dom-fiber-component'
 
 export function shouldSetTextContent(type, props) {
   return (
@@ -48,4 +48,9 @@ function shouldAutoFocusHostComponent(type, props) {
 
 export function appendChild(parent, child) {
   parent.appendChild(child)
+}
+
+export function commitUpdate(domElement, updatePayload, type, oldProps, newProps, internalInstanceHandle) {
+  updateFiberProps(domElement, newProps)
+  updateProperties(domElement, updatePayload, type, oldProps, newProps)
 }

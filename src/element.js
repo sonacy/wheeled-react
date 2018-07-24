@@ -30,24 +30,24 @@ export function createElement(type, config, children) {
         props[propName] = config[propName]
       }
     }
+  }
 
-    const childrenLength = arguments.length - 2
-    if (childrenLength === 1) {
-      props.children = children
-    } else if (childrenLength > 1) {
-      const childArray = Array(childrenLength)
-      for(let i = 0; i < childArray.length; i++) {
-        childArray[i] = arguments[i + 2]
-      }
-      props.children = childArray
+  const childrenLength = arguments.length - 2
+  if (childrenLength === 1) {
+    props.children = children
+  } else if (childrenLength > 1) {
+    const childArray = Array(childrenLength)
+    for(let i = 0; i < childArray.length; i++) {
+      childArray[i] = arguments[i + 2]
     }
+    props.children = childArray
+  }
 
-    if (type && type.defaultProps) {
-      const defaultProps = type.defaultProps
-      for(propName in defaultProps) {
-        if(props[propName] === undefined) {
-          props[propName] = defaultProps[propName]
-        }
+  if (type && type.defaultProps) {
+    const defaultProps = type.defaultProps
+    for(propName in defaultProps) {
+      if(props[propName] === undefined) {
+        props[propName] = defaultProps[propName]
       }
     }
   }

@@ -1,4 +1,5 @@
 import * as DOMRenderer from './reconciler/fiber-reconciler'
+import './dom/dom-client-injection'
 
 class ReactWork {
   constructor() {
