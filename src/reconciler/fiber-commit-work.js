@@ -1,4 +1,33 @@
-import { HostComponent, HostRoot, HostPortal, HostText, ClassComponent } from "../utils/type-of-work";
+import { HostComponent, HostRoot, HostPortal, HostText, ClassComponent } from "../utils/type-of-work"
+import { commitUpdate } from "../dom/dom-host-config";
+
+export function commitWork(current, finishedWork) {
+  switch (finishedWork.tag) {
+    case HostComponent:
+      const instance = finishedWork.stateNode
+      if (instance !== null) {
+        const newProps = finishedWork.memorizedProps
+        const oldProps = current !== null ? current.memorizedProps : newProps
+        const type = finishedWork.type
+        const updatePayload = finishedWork.updateQueue
+        finishedWork.updateQueue = null
+        if (updatePayload !== null) {
+          commitUpdate(
+            instance,
+            updatePayload,
+            type,
+            oldProps,
+            newProps,
+            finishedWork
+          )
+        }
+      }
+      return
+    case HostText:
+      // TODO
+      return
+  }
+}
 
 export function commitPlacement(finishedWork) {
   const parentFiber = getHostParent(finishedWork)

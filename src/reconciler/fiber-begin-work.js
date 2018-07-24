@@ -2,9 +2,9 @@ import { FunctionalComponent, IndeterminateComponent, ClassComponent, HostRoot, 
 import { processUpdateQueue } from './update-queue'
 import { DidCapture, NoEffect, PerformedWork } from "../utils/type-of-side-effect"
 import ReactCurrentOwner from '../current-owner'
-import { constructClassInstance, mountClassInstance } from './fiber-class-component'
+import { constructClassInstance, mountClassInstance, updateClassInstance } from './fiber-class-component'
 import { shouldSetTextContent } from '../dom/dom-host-config'
-import { mountChildFibers, reconcileChildFibers } from './child-fiber'
+import { mountChildFibers, reconcileChildFibers, cloneChildFibers } from './child-fiber'
 
 export function reconcileChildrenAtExpirationTime(
   current,
@@ -37,6 +37,11 @@ function memorizeState(workInProgress, nextState) {
   workInProgress.memorizedState = nextState
 }
 
+function bailoutOnAlreadyFinishedWork(current, workInProgress) {
+  cloneChildFibers(current, workInProgress)
+  return workInProgress.child
+}
+
 function updateClassComponent(current, workInProgress, renderExpirationTime) {
   // TODO hasContext
   let hasContext = false
@@ -55,7 +60,11 @@ function updateClassComponent(current, workInProgress, renderExpirationTime) {
       // TODO reuse the component instance
     }
   } else {
-    // TODO udpate component process
+    shouldUpdate = updateClassInstance(
+      current,
+      workInProgress,
+      renderExpirationTime
+    )
   }
   return finishClassComponent(current, workInProgress, shouldUpdate, hasContext, renderExpirationTime)
 }
@@ -117,11 +126,12 @@ function updateHostRoot(current, workInProgress, renderExpirationTime) {
     const nextState = workInProgress.memorizedState
     const nextChildren = nextState.element
     if (nextChildren === prevChildren) {
-      // TODO bailout
+      return bailoutOnAlreadyFinishedWork(current, workInProgress)
     }
     reconcileChildrenAtExpirationTime(current, workInProgress, nextChildren, workInProgress.expirationTime)
     return workInProgress.child
   }
+  return bailoutOnAlreadyFinishedWork(current, workInProgress)
 }
 
 function updateHostComponent(current, workInProgress, renderExpirationTime) {
@@ -130,7 +140,7 @@ function updateHostComponent(current, workInProgress, renderExpirationTime) {
   const memorizedProps = workInProgress.memorizedProps
   const nextProps = workInProgress.pendingProps
   const prevProps = current !== null ? current.memorizedProps : null
-
+  // console.log(memorizedProps === nextProps)
   // TODO contextChange or hidden
 
   let nextChildren = nextProps.children

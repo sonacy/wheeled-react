@@ -7,7 +7,7 @@ import ReactCurrentOwner from '../current-owner'
 import { beginWork } from './fiber-begin-work'
 import { Incomplete, NoEffect, PerformedWork, Placement, Update, Deletion, PlacementAndUpdate, Callback } from '../utils/type-of-side-effect'
 import { completeWork } from './fiber-complete-work'
-import { commitPlacement, commitLifeCycles} from './fiber-commit-work'
+import { commitPlacement, commitLifeCycles, commitWork} from './fiber-commit-work'
 import { markPendingPriorityLevel, markCommittedPriorityLevels } from './fiber-pending-priority'
 
 let expirationContext = NoWork
@@ -58,6 +58,12 @@ function computeExpirationForFiber(currentTime, fiber) {
     }
   }
 
+  if (isBatchingInteractiveUpdates) {
+    if (lowestPendingInteractiveExpirationTime === NoWork || expirationTime > lowestPendingInteractiveExpirationTime) {
+      lowestPendingInteractiveExpirationTime = expirationTime
+    }
+  }
+
   return expirationTime
 }
 
@@ -84,10 +90,12 @@ let lastScheduledRoot = null
 let isRendering = false
 let nextFlushedRoot = null
 let nextFlushedExpirationTime = NoWork
+let lowestPendingInteractiveExpirationTime = NoWork
 let deadline = null
 
 let isBatchingUpdates = false
 let isUnbatchingUpdates = false
+let isBatchingInteractiveUpdates = false
 
 let originalStartTimeMs = now()
 let currentRendererTime = msToExpirationTime(originalStartTimeMs)
@@ -170,7 +178,6 @@ function performWork(minExpirationTime, dl) {
       nextFlushedExpirationTime !== NoWork
       && (minExpirationTime === NoWork ||
         minExpirationTime >= nextFlushedExpirationTime)) {
-      if (nestedUpdateCount > NESTED_UPDATE_LIMIT) break
       performWorkOnRoot(nextFlushedRoot, nextFlushedExpirationTime, true)
       findHighestPriorityRoot()
     }
@@ -391,7 +398,8 @@ function commitAllHostEffects() {
         // TODO
         break
       case Update:
-        // TODO
+        const current = nextEffect.alternate
+        commitWork(current, nextEffect)
         break
       case Deletion:
         // TODO
@@ -558,4 +566,43 @@ function unbatchedUpdates(fn, a) {
   return fn(a)
 }
 
-export {requestCurrentTime, computeExpirationForFiber, scheduleWork, unbatchedUpdates}
+function batchedUpdates(fn, a) {
+  const previousIsBatchingUpdates = isBatchingUpdates
+  isBatchingUpdates = true
+  try {
+    return fn(a)
+  } finally {
+    isBatchingUpdates = previousIsBatchingUpdates
+    if (!isBatchingUpdates && !isRendering) {
+      performSyncWork()
+    }
+  }
+}
+
+function interactiveUpdates(fn, a, b) {
+  if (isBatchingInteractiveUpdates) {
+    return fn(a, b)
+  }
+
+  if (!isBatchingUpdates && !isRendering && lowestPendingInteractiveExpirationTime !== NoWork) {
+    performWork(lowestPendingInteractiveExpirationTime, null)
+    lowestPendingInteractiveExpirationTime = NoWork
+  }
+
+  const previousIsBatchingInteractiveUpdates = isBatchingInteractiveUpdates
+  const previousIsBatchingUpdates = isBatchingUpdates
+  isBatchingInteractiveUpdates = true
+  isBatchingUpdates = true
+
+  try {
+    return fn(a, b)
+  } finally {
+    isBatchingInteractiveUpdates = previousIsBatchingInteractiveUpdates
+    isBatchingUpdates = previousIsBatchingUpdates
+    if (!isBatchingUpdates && !isRendering) {
+      performSyncWork()
+    }
+  }
+}
+
+export {requestCurrentTime, computeExpirationForFiber, scheduleWork, unbatchedUpdates, batchedUpdates, interactiveUpdates}

@@ -39,6 +39,27 @@
               -5.没有sibling, node=node.return, root fiber, completework => HostRoot => null
       - completeRoot => commitRoot => prepareForCommit 保存selection状态 => commitBeforeMutationLifecycles getSnapshotBeforeUpdate生命周期函数 => commitAllHostEffects 执行Placement 插入到文档操作 => resetAfterCommit 恢复selection状态 => commitAllLifeCycles componentDidMount生命周期函数
 
+## setState
+
+- 启动时会初始化 SimpleEventPlugin
+- 首次render的时候去绑定onClick事件
+- document 上绑定 dispatchInteractiveEvent 事件
+- 点击触发的时候 执行interactiveUpdate
+- 设置 isBactching 为true 执行dispatchEvent
+- 缓存nativeEvent topLevelType instance , bookkeeping , 执行batchUpdate
+- 执行handleTopLevel, 执行runExtractedEventsInBatch
+- extractEvents, 使用 SimpleEventPlugin 的 extractEvents
+- accumulateTwoPhaseDispatches => traverseTwoPhase => 将 bubble 和 capture 绑定到 event._dispatchListeners 和 event._dispatchInstances
+- 绑定结束后 runEventInBatch 批量执行事件
+- 执行过程中到 setState => classComponentUpdater.enqueueSetState
+- 创建updater => enqueueUpdate => scheduleWork => requestWork
+- 由于不是isUnbatchingUpdates 结束了setState
+- batchUpdates 内部fn执行结束后 isBatchingUpdate 为true 不执行performSync
+- 结束batchUpdates 后 releaseTopLevelCallbackBookKeeping 释放缓存
+- interactiveUpdates 内部fn执行结束后 isBatchingUpdate 为 false 执行 performSync
+- 同render阶段 但是这一次current有值 所有都是根据current 生成的 workInProgress
+- commit 阶段 根据effectTag 为 Update , 更新property
+
 ## apenddix
 
 - root fiber 的stateNode 就是root 也就是初始生成的一个对象 对象的current又指向了root fiber

@@ -6,6 +6,8 @@ export const ReplaceState = 1
 export const ForceUpdate = 2
 export const CaptureUpdate = 3
 
+let hasForceUpdate = false
+
 export function createUpdateQueue(baseState) {
   const queue = {
     expirationTime: NoWork,
@@ -150,7 +152,7 @@ export function processUpdateQueue(
   instance,
   renderExpirationTime
 ) {
-  // TODO hasForceUpdate = false
+  hasForceUpdate = false
 
   if (queue.expirationTime === NoWork || queue.expirationTime > renderExpirationTime) {
     return
@@ -213,4 +215,12 @@ export function processUpdateQueue(
   queue.firstCaptureEffect = newFirstCapturedUpdate
   queue.expirationTime = newExpirationTime
   workInProgress.memorizedState = resultState
+}
+
+export function resetHasForceUpdateBeforeProcessing() {
+  hasForceUpdate = false
+}
+
+export function checkHasForceUpdateAfterProcessing() {
+  return hasForceUpdate
 }

@@ -1,5 +1,7 @@
 import { FunctionalComponent, ClassComponent, HostRoot, HostComponent, HostText, HostPortal } from "../utils/type-of-work"
 import { createTextInstance, createInstance, appendInitialChild, finalizeInitialChildren } from '../dom/dom-host-config'
+import { diffProperties } from "../dom/dom-fiber-component";
+import { Update } from "../utils/type-of-side-effect";
 
 function appendAllChildren(parent, workInProgress) {
   let node = workInProgress.child
@@ -24,6 +26,20 @@ function appendAllChildren(parent, workInProgress) {
   }
 }
 
+let updateHostComponent = function(
+  current,
+  workInProgress,
+  updatePayload,
+  type,
+  oldProps,
+  newProps
+) {
+  workInProgress.updateQueue = updatePayload
+  if (updatePayload) {
+    workInProgress.effectTag |= Update
+  }
+}
+
 export function completeWork(current, workInProgress, renderExpirationTime) {
   const newProps = workInProgress.pendingProps
   switch (workInProgress.tag) {
@@ -39,7 +55,19 @@ export function completeWork(current, workInProgress, renderExpirationTime) {
       // TODO context
       const type = workInProgress.type
       if (current && workInProgress.stateNode != null) {
-        // TODO compare
+        const oldProps = current.memorizedProps
+        const instance = workInProgress.stateNode
+        // TODO context
+        const updatePayload = diffProperties(instance, type, oldProps, newProps)
+        updateHostComponent(
+          current,
+          workInProgress,
+          updatePayload,
+          type,
+          oldProps,
+          newProps
+        )
+        // TODO ref
       } else {
         let instance = createInstance(
           type,
