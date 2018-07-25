@@ -5,7 +5,7 @@ import { HostRoot, ClassComponent } from '../utils/type-of-work'
 import { createWorkInProgress } from './fiber'
 import ReactCurrentOwner from '../current-owner'
 import { beginWork } from './fiber-begin-work'
-import { Incomplete, NoEffect, PerformedWork, Placement, Update, Deletion, PlacementAndUpdate, Callback } from '../utils/type-of-side-effect'
+import { Incomplete, NoEffect, PerformedWork, Placement, Update, Deletion, PlacementAndUpdate, Callback, Snapshot } from '../utils/type-of-side-effect'
 import { completeWork } from './fiber-complete-work'
 import { commitPlacement, commitLifeCycles, commitWork} from './fiber-commit-work'
 import { markPendingPriorityLevel, markCommittedPriorityLevels } from './fiber-pending-priority'
@@ -378,7 +378,32 @@ function completeRoot(root, finishedWork, expirationTime) {
 }
 
 function commitBeforeMutationLifecycles() {
-  // TODO snapshot
+  while (nextEffect !== null) {
+    const effectTag = nextEffect.effectTag
+    if (effectTag & Snapshot) {
+      const current = nextEffect.alternate
+      commitBeforeMutationLifeCycles(current, nextEffect)
+    }
+    nextEffect = nextEffect.nextEffect
+  }
+}
+
+function commitBeforeMutationLifeCycles(current, finishedWork) {
+  switch (finishedWork.tag) {
+    case ClassComponent: {
+      const prevProps = current.memorizedProps
+      const prevState = current.memorizedState
+      const instance = finishedWork.stateNode
+      instance.props = finishedWork.memorizedProps
+      instance.state = finishedWork.memorizedState
+      const snapshot = instance.getSnapshotBeforeUpdate(
+        prevProps,
+        prevState
+      )
+      instance.__reactInternalSnapshotBeforeUpdate = snapshot
+      return
+    }
+  }
 }
 
 function commitAllHostEffects() {
@@ -395,10 +420,13 @@ function commitAllHostEffects() {
         nextEffect.effectTag &= ~Placement
         break
       case PlacementAndUpdate:
-        // TODO
+        commitPlacement(nextEffect)
+        nextEffect.effectTag &= ~Placement
+        let current = nextEffect.alternate
+        commitWork(current, nextEffect)
         break
       case Update:
-        const current = nextEffect.alternate
+        current = nextEffect.alternate
         commitWork(current, nextEffect)
         break
       case Deletion:
