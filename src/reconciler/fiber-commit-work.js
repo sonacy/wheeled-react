@@ -1,5 +1,6 @@
 import { HostComponent, HostRoot, HostPortal, HostText, ClassComponent } from "../utils/type-of-work"
 import { commitUpdate } from "../dom/dom-host-config";
+import { Update } from "../utils/type-of-side-effect";
 
 export function commitWork(current, finishedWork) {
   switch (finishedWork.tag) {
@@ -124,10 +125,39 @@ function isHostParent(fiber) {
 
 export function commitLifeCycles(finishedRoot, current, finishedWork, committedExpirationTime) {
   switch (finishedWork.tag) {
-    case ClassComponent:
-      // TODO
-      break
-    case HostRoot:
+    case ClassComponent: {
+      const instance = finishedWork.stateNode
+      if (finishedWork.effectTag & Update) {
+        if (current === null) {
+          instance.props = finishedWork.memorizedProps
+          instance.state = finishedWork.memorizedState
+          instance.componentDidMount()
+        } else {
+          const prevProps = current.memorizedProps
+          const prevState = current.memorizedState
+          instance.props = finishedWork.memorizedProps
+          instance.state = finishedWork.memorizedState
+          instance.componentDidUpdate(
+            prevProps,
+            prevState,
+            instance.__reactInternalSnapshotBeforeUpdate
+          )
+        }
+      }
+      const updateQueue = finishedWork.updateQueue
+      if (updateQueue !== null) {
+        instance.props = finishedWork.memorizedProps
+        instance.state = finishedWork.memorizedState
+        commitUpdateQueue(
+          finishedWork,
+          updateQueue,
+          instance,
+          committedExpirationTime
+        )
+      }
+      return
+    }
+    case HostRoot: {
       const updateQueue = finishedWork.updateQueue
       if (updateQueue !== null) {
         let instance = null
@@ -148,7 +178,8 @@ export function commitLifeCycles(finishedRoot, current, finishedWork, committedE
           committedExpirationTime
         )
       }
-      break
+      return
+    }
     // TODO others
   }
 }

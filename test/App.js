@@ -8,6 +8,33 @@ class App extends React.Component {
     counter: 0
   }
 
+  static getDerivedStateFromProps(props, state) {
+    console.log('getDerivedStateFromProps, props: ', props, ' state: ', state)
+    return state
+  }
+
+  componentDidMount() {
+    console.log('componentDidMount')
+  }
+
+  shouldComponentUpdate(nextProps, nextState) {
+    console.log('shouldComponentUpdate, nextProps: ', nextProps, ' nextState: ', nextState)
+    return true
+  }
+
+  getSnapshotBeforeUpdate(prevProps, prevState) {
+    console.log('getSnapshotBeforeUpdate, prevProps: ',prevProps, 'prevState: ',prevState)
+    return null
+  }
+
+  componentDidUpdate(prevProps, prevState, snapshot) {
+    console.log('componentDidUpdate, prevProps: ', prevProps, ' prevState: ', prevState, ' snapshot: ', snapshot)
+  }
+
+  componentWillUnmount() {
+    console.log('componentWillUnmount')
+  }
+
   add = () => {
     this.setState({
       counter: this.state.counter + 1

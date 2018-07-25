@@ -1,7 +1,8 @@
 import * as ReactInstanceMap from '../utils/instance-map'
 import { processUpdateQueue, createUpdate, enqueueUpdate, resetHasForceUpdateBeforeProcessing, checkHasForceUpdateAfterProcessing } from './update-queue'
-import { Update } from '../utils/type-of-side-effect'
+import { Update, Snapshot } from '../utils/type-of-side-effect'
 import { requestCurrentTime, computeExpirationForFiber, scheduleWork } from './fiber-scheduler';
+import { NoWork } from './fiber-expiration-time';
 
 const classComponentUpdater = {
   isMounted(inst) {
@@ -74,13 +75,24 @@ export function mountClassInstance(workInProgress, renderExpirationTime) {
 
   const getDerivedStateFromProps = ctor.getDerivedStateFromProps
   if (typeof getDerivedStateFromProps === 'function') {
-    // TODO run getDerivedStateFromProps
+    applyDerivedStateFromProps(workInProgress, getDerivedStateFromProps, props)
+    instance.state = workInProgress.memorizedState
   }
-
-  // TODO old api componentWillMount
 
   if (typeof instance.componentDidMount === 'function') {
     workInProgress.effectTag |= Update
+  }
+}
+
+export function applyDerivedStateFromProps(workInProgress, getDerivedStateFromProps, nextProps) {
+  const prevState = workInProgress.memorizedState
+
+  const partialState = getDerivedStateFromProps(nextProps, prevState)
+  const memorizedState = partialState === null || partialState === undefined ? prevState : Object.assign({}, prevState, partialState)
+  workInProgress.memorizedState = memorizedState
+  const updateQueue = workInProgress.updateQueue
+  if (updateQueue !== null && updateQueue.expirationTime === NoWork) {
+    updateQueue.baseState = memorizedState
   }
 }
 
@@ -94,7 +106,7 @@ export function updateClassInstance(current, workInProgress, renderExpirationTim
 
   // TODO context
 
-  // TODO lifecycle api compat componentWillReceiveProps
+  const getDerivedStateFromProps = ctor.getDerivedStateFromProps
 
   resetHasForceUpdateBeforeProcessing()
 
@@ -106,7 +118,26 @@ export function updateClassInstance(current, workInProgress, renderExpirationTim
     newState = workInProgress.memorizedState
   }
 
-  // TODO add life cycle effect
+  if (oldProps === newProps && oldState === newState && !checkHasForceUpdateAfterProcessing() && !false/*hasContextChanged()*/) {
+    if (typeof instance.componentDidUpdate === 'function') {
+      if (oldProps !== current.memorizedProps || oldState !== current.memorizedState) {
+        workInProgress.effectTag |= Update
+      }
+    }
+
+    if (typeof instance.getSnapshotBeforeUpdate === 'function') {
+      if (oldProps !== current.memorizedProps || oldState !== current.memorizedState) {
+        workInProgress.effectTag |= Snapshot
+      }
+    }
+
+    return false
+  }
+
+  if (typeof getDerivedStateFromProps === 'function') {
+    applyDerivedStateFromProps(workInProgress, getDerivedStateFromProps, newProps)
+    newState = workInProgress.memorizedState
+  }
 
   const shouldUpdate = checkHasForceUpdateAfterProcessing() || checkShouldComponentUpdate(
     workInProgress,
@@ -117,7 +148,30 @@ export function updateClassInstance(current, workInProgress, renderExpirationTim
     // newContext
   )
 
-  // TODO check for life cycle
+  if (shouldUpdate) {
+    if (typeof instance.componentDidUpdate === 'function') {
+      workInProgress.effectTag |= Update
+    }
+
+    if (typeof instance.getSnapshotBeforeUpdate === 'function') {
+      workInProgress.effectTag |= Snapshot
+    }
+  } else {
+    if (typeof instance.componentDidUpdate === 'function') {
+      if (oldProps !== current.memorizedProps || oldState !== current.memorizedState) {
+        workInProgress.effectTag |= Update
+      }
+    }
+
+    if (typeof instance.getSnapshotBeforeUpdate === 'function') {
+      if (oldProps !== current.memorizedProps || oldState !== current.memorizedState) {
+        workInProgress.effectTag |= Snapshot
+      }
+    }
+
+    workInProgress.memorizedProps = newProps
+    workInProgress.memorizedState = newState
+  }
 
   instance.props = newProps
   instance.state = newState
