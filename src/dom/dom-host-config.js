@@ -34,6 +34,12 @@ export function finalizeInitialChildren(domElement, type, props) {
   return shouldAutoFocusHostComponent(type, props)
 }
 
+export function commitMount(domElement, type, newProps, internalInstanceHandle) {
+  if (shouldAutoFocusHostComponent(type, newProps)) {
+    domElement.focus()
+  }
+}
+
 function shouldAutoFocusHostComponent(type, props) {
   switch (type) {
     case 'button':

@@ -1,5 +1,5 @@
 import React from '../src/index'
 import './index.css'
-import App from './App'
+import ToDoList from './ToDoList.jsx'
 
-React.render(<App />, document.getElementById('root'))
+React.render(<ToDoList />, document.getElementById('root'))

@@ -32,5 +32,5 @@ export function executeDispatchesInOrder(event) {
 }
 
 function executeDispatch(event, listener, inst) {
-  listener.apply(null, event)
+  listener.call(inst, event)
 }

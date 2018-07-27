@@ -31,3 +31,15 @@ export function forEachAccumulate(arr, cb, scope) {
     cb.call(scope, arr)
   }
 }
+
+export function isEventSupported(eventName, capture) {
+  const name = 'on' + eventName
+  let isSupported = eventName in document
+  if (!isSupported) {
+    const element = document.createElement('div')
+    element.setAttribute(eventName, 'return;')
+    isSupported = typeof element[eventName] === 'function'
+  }
+
+  return isSupported
+}

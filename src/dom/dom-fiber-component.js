@@ -1,5 +1,9 @@
 import { registrationNameModules } from '../event/registry.js'
 import { listenTo } from '../event/event-emitter.js'
+import { trapBubbledEvent } from '../event/dom-event-listener.js'
+import { TOP_LOAD, mediaEventTypes, TOP_ERROR, TOP_RESET, TOP_SUBMIT, TOP_TOGGLE, TOP_INVALID } from '../event/dom-event-types.js'
+import * as ReactDOMFiberInput from '../dom/dom-fiber-input'
+import * as InputValueTracker from '../dom/input-value-track'
 
 const DANGEROUSLY_SET_INNER_HTML = 'dangerouslySetInnerHTML'
 const SUPPRESS_CONTENT_EDITABLE_WARNING = 'suppressContentEditableWarning'
@@ -9,15 +13,81 @@ const CHILDREN = 'children'
 const STYLE = 'style'
 const HTML = '__html'
 
+function trapClickOnNonInteractiveElement(node) {
+  node.onclick = noop
+}
+
 export function setInitialProperties(domElement, tag, rawProps) {
-  // TODO init event binding
+  let props
+  switch (tag) {
+    case 'iframe':
+    case 'object':
+      trapBubbledEvent(TOP_LOAD, domElement)
+      props = rawProps
+      break
+    case 'video':
+    case 'audio':
+      for(let i = 0; i < mediaEventTypes.length; i++) {
+        trapBubbledEvent(mediaEventTypes[i], domElement)
+      }
+      props = rawProps
+      break
+    case 'source':
+      trapBubbledEvent(TOP_ERROR, domElement)
+      props = rawProps
+      break
+    case 'img':
+    case 'image':
+    case 'link':
+      trapBubbledEvent(TOP_ERROR, domElement)
+      trapBubbledEvent(TOP_LOAD, domElement)
+      props = rawProps
+      break
+    case 'form':
+      trapBubbledEvent(TOP_RESET, domElement)
+      trapBubbledEvent(TOP_SUBMIT, domElement)
+      props = rawProps
+      break
+    case 'detail':
+      trapBubbledEvent(TOP_TOGGLE, domElement)
+      props = rawProps
+      break
+    case 'input':
+      ReactDOMFiberInput.initWrapperState(domElement, rawProps)
+      props = ReactDOMFiberInput.getHostProps(domElement, rawProps)
+      trapBubbledEvent(TOP_INVALID, domElement)
+      listenTo('onChange')
+      break
+    case 'option':
+    case 'select':
+    case 'textarea':
+    // TODO
+    default:
+      props = rawProps
+      break
+  }
   // TODO validate props
   setInitialDOMProperties(
     tag,
     domElement,
-    rawProps
+    props
   )
-  // TODO form tag tracking
+
+  switch (tag) {
+    case 'input':
+      InputValueTracker.track(domElement)
+      ReactDOMFiberInput.postMountWrapper(domElement, rawProps)
+      break
+    case 'textarea':
+    case 'select':
+    case 'option':
+    // TODO
+    default:
+      if (typeof props.onClick === 'function') {
+        trapClickOnNonInteractiveElement(domElement)
+      }
+      break
+  }
 }
 
 function setInitialDOMProperties(tag, domElement, nextProps) {

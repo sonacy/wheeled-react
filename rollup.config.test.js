@@ -3,11 +3,13 @@ import resolve from 'rollup-plugin-node-resolve'
 import postcss from 'rollup-plugin-postcss'
 import cssnext from 'postcss-cssnext'
 import image from 'rollup-plugin-img'
+import serve from 'rollup-plugin-serve'
+import livereload from 'rollup-plugin-livereload'
 
 export default {
   input: 'test/index.js',
   output: {
-    file: 'dist/test.js',
+    file: 'test/public/test.js',
     format: 'cjs'
   },
   watch: {
@@ -26,6 +28,10 @@ export default {
     resolve(),
     babel({
       exclude: 'node_modules/**'
+    }),
+    serve('test/public'),
+    livereload({
+      watch: './test/public'
     })
   ]
 }
