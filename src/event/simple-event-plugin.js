@@ -34,7 +34,7 @@ const interactiveEventTypeNames = [
   [DOMTopLevelEventTypes.TOP_TOUCH_CANCEL, 'touchCancel'],
   [DOMTopLevelEventTypes.TOP_TOUCH_END, 'touchEnd'],
   [DOMTopLevelEventTypes.TOP_TOUCH_START, 'touchStart'],
-  [DOMTopLevelEventTypes.TOP_VOLUME_CHANGE, 'volumeChange'],
+  [DOMTopLevelEventTypes.TOP_VOLUME_CHANGE, 'volumeChange']
 ]
 const nonInteractiveEventTypeNames = [
   [DOMTopLevelEventTypes.TOP_ABORT, 'abort'],
@@ -109,6 +109,7 @@ const SimpleEventPlugin = {
   },
   extractEvents(topLevelType, targetInst, nativeEvent, nativeEventTarget) {
     const dispatchConfig = topLevelEventsToDispatchConfig[topLevelType]
+    if (!dispatchConfig) return null
     nativeEvent.dispatchConfig = dispatchConfig
     nativeEvent._targetInst = targetInst
     accumulateTwoPhaseDispatches(nativeEvent)

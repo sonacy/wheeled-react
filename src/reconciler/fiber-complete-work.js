@@ -40,6 +40,10 @@ let updateHostComponent = function(
   }
 }
 
+function markUpdate(workInProgress) {
+  workInProgress.effectTag |= Update
+}
+
 export function completeWork(current, workInProgress, renderExpirationTime) {
   const newProps = workInProgress.pendingProps
   switch (workInProgress.tag) {
@@ -78,7 +82,7 @@ export function completeWork(current, workInProgress, renderExpirationTime) {
         appendAllChildren(instance, workInProgress)
 
         if (finalizeInitialChildren(instance, type, newProps)) {
-          // TODO autofocus
+          markUpdate(workInProgress)
         }
         workInProgress.stateNode = instance
         // TODO ref

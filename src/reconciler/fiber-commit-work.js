@@ -1,5 +1,5 @@
 import { HostComponent, HostRoot, HostPortal, HostText, ClassComponent } from "../utils/type-of-work"
-import { commitUpdate } from "../dom/dom-host-config";
+import { commitUpdate, commitMount } from "../dom/dom-host-config";
 import { Update } from "../utils/type-of-side-effect";
 
 export function commitWork(current, finishedWork) {
@@ -180,7 +180,16 @@ export function commitLifeCycles(finishedRoot, current, finishedWork, committedE
       }
       return
     }
-    // TODO others
+    case HostComponent: {
+      const instance = finishedWork.stateNode
+      // first mount and autofocus update
+      if (current === null && finishedWork.effectTag & Update) {
+        const type = finishedWork.type
+        const props = finishedWork.memorizedProps
+        commitMount(instance, type, props, finishedWork)
+      }
+      return
+    }
   }
 }
 
