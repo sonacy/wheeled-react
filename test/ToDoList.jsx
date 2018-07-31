@@ -69,7 +69,7 @@ class ToDoList extends React.Component {
   }
 
   checkForAllCompleted(list) {
-    let isAllCompleted = true
+    let isAllCompleted = (list && list.length > 0) ? true : false
     list.forEach(item => {
       if (!item.isCompleted) isAllCompleted = false
     })

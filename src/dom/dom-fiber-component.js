@@ -116,11 +116,24 @@ function setInitialDOMProperties(tag, domElement, nextProps) {
       } else if (typeof nextProp === 'number') {
         domElement.textContent = nextProp
       }
+    } else if (propKey === SUPPRESS_CONTENT_EDITABLE_WARNING || propKey === SUPPRESS_HYDRATION_WARNING) {
+
+    } else if (propKey === AUTOFOCUS) {
+
     } else if (registrationNameModules.hasOwnProperty(propKey)) {
       listenTo(propKey)
     } else if (nextProp != null) {
-      let name = propKey === 'className' ? 'class' : propKey
+      let name = propKey
+      if (name === 'className') {
+        name = 'class'
+      } else if (name === 'htmlFor') {
+        name = 'for'
+      }
       let value = nextProp
+      if (name === 'checked') {
+        domElement[name] = value
+        continue
+      }
       if (value === null) {
         domElement.removeAttribute(name)
       } else {
@@ -135,10 +148,26 @@ function noop() {}
 
 export function diffProperties(domElement, tag, lastRawProps, nextRawProps) {
   let updatePayload = null
-  // TODO controlled component
 
-  let lastProps = lastRawProps
-  let nextProps = nextRawProps
+  let lastProps
+  let nextProps
+
+  switch (tag) {
+    case 'input':
+      lastProps = ReactDOMFiberInput.getHostProps(domElement, lastRawProps)
+      nextProps = ReactDOMFiberInput.getHostProps(domElement, nextRawProps)
+      updatePayload = []
+      break
+    // TODO option select textarea
+    default:
+      lastProps = lastRawProps
+      nextProps = nextRawProps
+      if (typeof lastProps.onClick === 'function' && typeof nextProps.onClick === 'function') {
+        trapClickOnNonInteractiveElement(domElement)
+      }
+      break
+  }
+
   if (typeof lastProps.onClick !== 'function' && typeof nextProps.onClick === 'function') {
     // safari bubble delegate problem
     domElement.onclick = noop
@@ -207,11 +236,18 @@ export function diffProperties(domElement, tag, lastRawProps, nextRawProps) {
 }
 
 export function updateProperties(domElement, updatePayload, tag, lastRawProps, nextRawProps) {
-  // TODO udate check for input radio
+  if (tag === 'input' && nextRawProps.type === 'radio' && nextRawProps.name !== null) {
+    ReactDOMFiberInput.updateChecked(domElement, nextRawProps)
+  }
 
   updateDOMProperties(domElement, updatePayload)
 
-  // TODO controlled tag eg: input textarea slelect
+  switch (tag) {
+    case 'input':
+      ReactDOMFiberInput.updateWrapper(domElement, nextRawProps)
+      break
+    // TODO textarea select
+  }
 }
 
 function updateDOMProperties(domElement, updatePayload) {
@@ -226,7 +262,23 @@ function updateDOMProperties(domElement, updatePayload) {
       // TODO optimize for get firstchild and set nodevalue is faster
       domElement.textContent = propValue
     } else {
-      // others
+      let name = propKey
+      if (name === 'className') {
+        name = 'class'
+      } else if (name === 'htmlFor') {
+        name = 'for'
+      }
+      let value = propValue
+      if (name === 'checked') {
+        domElement[name] = value
+        continue
+      }
+      if (value === null) {
+        domElement.removeAttribute(name)
+      } else {
+        // TODO boolean
+        domElement.setAttribute(name, value)
+      }
     }
   }
 }

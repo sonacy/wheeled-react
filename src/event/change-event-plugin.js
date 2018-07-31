@@ -4,6 +4,7 @@ import { isEventSupported } from "./dom-event-utils"
 import * as inputValueTracking from '../dom/input-value-track'
 import { accumulateTwoPhaseDispatches } from "./event-propagation";
 import { enqueueStateRestore } from "./controlled-component";
+import { setDefaultValue } from "../dom/dom-fiber-input"
 
 const supportedInputTypes = {
   color: true,
@@ -59,9 +60,9 @@ function isTextInputElement(elem) {
 }
 
 function shouldUseClickEvent(elem) {
-  const nodeName = elem && elem.nodeName && elem.nodeName.toLowerCase()
+  const nodeName = elem.nodeName
   return (
-    nodeName && nodeName === 'input' && (elem.type === 'checkbox' || elem.type === 'radio')
+    nodeName && nodeName.toLowerCase() === 'input' && (elem.type === 'checkbox' || elem.type === 'radio')
   )
 }
 
@@ -96,19 +97,6 @@ function handleControlledInputBlur(node) {
   setDefaultValue(node, 'number', node.value)
 }
 
-function setDefaultValue(node, type, value) {
-  if (
-    type !== 'number' ||
-    node.ownerDocument.activeElement !== node
-  ) {
-    if (value == null) {
-      node.defaultValue = '' + node._wrapperState.initialValue
-    } else if (node.defaultValue !== '' + value) {
-      node.defaultValue = '' + value
-    }
-  }
-}
-
 // not supported for ie 9
 let isInputEventSupported = isEventSupported('input') && (!document.documentMode || document.documentMode > 9)
 
@@ -128,7 +116,7 @@ const changeEventPlugin = {
       // } else {
       //   // 2.2 不支持input事件
       // }
-    } else if (shouldUseClickEvent(targetInst)) {
+    } else if (shouldUseClickEvent(targetNode)) {
       // 3. radio checkbox
       getTargetInstFunc = getTargetInstForClickEvent
     }
@@ -138,6 +126,8 @@ const changeEventPlugin = {
     if (getTargetInstFunc) {
       const inst = getTargetInstFunc(topLevelType, targetInst)
       if (inst) {
+        nativeEvent.dispatchConfig = eventTypes.change
+        nativeEvent._targetInst = targetInst
         enqueueStateRestore(nativeEventTarget)
         accumulateTwoPhaseDispatches(nativeEvent)
         return nativeEvent

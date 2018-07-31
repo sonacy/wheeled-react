@@ -7,7 +7,7 @@ import ReactCurrentOwner from '../current-owner'
 import { beginWork } from './fiber-begin-work'
 import { Incomplete, NoEffect, PerformedWork, Placement, Update, Deletion, PlacementAndUpdate, Callback, Snapshot } from '../utils/type-of-side-effect'
 import { completeWork } from './fiber-complete-work'
-import { commitPlacement, commitLifeCycles, commitWork} from './fiber-commit-work'
+import { commitPlacement, commitLifeCycles, commitWork, commitDeletion} from './fiber-commit-work'
 import { markPendingPriorityLevel, markCommittedPriorityLevels } from './fiber-pending-priority'
 
 let expirationContext = NoWork
@@ -430,7 +430,7 @@ function commitAllHostEffects() {
         commitWork(current, nextEffect)
         break
       case Deletion:
-        // TODO
+        commitDeletion(nextEffect)
         break
     }
 

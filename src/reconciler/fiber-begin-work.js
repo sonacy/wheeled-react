@@ -74,8 +74,8 @@ function finishClassComponent(current, workInProgress, shouldUpdate, hasContext,
   const didCaptureError = (workInProgress.effectTag & DidCapture) !== NoEffect
 
   if (!shouldUpdate && !didCaptureError) {
-    // TODO bailout
-    return
+    // TODO context provider
+    return bailoutOnAlreadyFinishedWork(current, workInProgress)
   }
 
   const ctor = workInProgress.type

@@ -86,6 +86,9 @@ function dispatchInteractiveEvent(topLevelType, nativeEvent) {
 }
 
 function dispatchEvent(topLevelType, nativeEvent) {
+  // console.log(topLevelType, nativeEvent.target)
+  // if (topLevelType === 'dblclick') debugger
+
   const target = getEventTarget(nativeEvent)
   let inst = getClosestInstanceFromNode(target)
   // TODO isMounted eg: img onload maybe get an event before committing
