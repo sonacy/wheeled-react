@@ -209,7 +209,87 @@ function ChildReconciler(shouldTrackSideEffects) {
       return resultingFirstFiber
     }
 
-    // TODO remaining child
+    const existingChildren = mapRemainingChildren(returnFiber, oldFiber)
+
+    for(; newIdx < newChildren.length; newIdx++) {
+      const newFiber = updateFromMap(
+        existingChildren,
+        returnFiber,
+        newIdx,
+        newChildren[newIdx],
+        expirationTime
+      )
+      if (newFiber) {
+        if (shouldTrackSideEffects) {
+          if (newFiber.alternate !== null) {
+            existingChildren.delete(newFiber.key === null ? newIdx : newFiber.key)
+          }
+        }
+
+        lastPlacedIndex = placeChild(newFiber, lastPlacedIndex, newIdx)
+        if (previousNewFiber === null) {
+          resultingFirstFiber = newFiber
+        } else {
+          previousNewFiber.sibling = newFiber
+        }
+        previousNewFiber = newFiber
+      }
+    }
+
+    if (shouldTrackSideEffects) {
+      existingChildren.forEach(child => deleteChild(returnFiber, child))
+    }
+
+    return resultingFirstFiber
+  }
+
+  function updateFromMap(existingChildren, returnFiber, newIdx, newChild, expirationTime) {
+    if (typeof newChild === 'string' || typeof newChild === 'number') {
+      const matchedFiber = existingChildren.get(newIdx) || null
+      return updateTextNode(
+        returnFiber,
+        matchedFiber,
+        '' + newChild,
+        expirationTime
+      )
+    }
+
+    if (typeof newChild === 'object' && newChild !== null) {
+      switch (newChild.$$typeof) {
+        case REACT_ELEMENT_TYPE: {
+          const matchedFiber = existingChildren.get(newChild.key === null ? newIdx : newChild.key) || null
+          if (newChild.type === REACT_FRAGMENT_TYPE) {
+            // TODO frament
+          }
+          return updateElement(
+            returnFiber,
+            matchedFiber,
+            newChild,
+            expirationTime
+          )
+        }
+        // TODO portal
+      }
+
+      // TODO newchild is array cause it is fragment
+    }
+
+    return null
+  }
+
+  function mapRemainingChildren(returnFiber, currentFirstChild) {
+    const existingChildren = new Map()
+    let existingChild = currentFirstChild
+    while (existingChild !== null) {
+      if (existingChild.key !== null) {
+        existingChildren.set(existingChild.key, existingChild)
+      } else {
+        existingChildren.set(existingChild.index, existingChild)
+      }
+      existingChild = existingChild.sibling
+    }
+
+    return existingChildren
   }
 
   function updateTextNode(returnFiber, current, textContent, expirationTime) {

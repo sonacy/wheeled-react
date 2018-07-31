@@ -65,4 +65,5 @@ typings/
 yarn.lock
 package-lock.json
 /.DS_Store/
+/test/public/test.js
 *.xmind

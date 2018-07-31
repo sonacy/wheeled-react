@@ -1,6 +1,6 @@
 import { HostComponent, HostRoot, HostPortal, HostText, ClassComponent } from "../utils/type-of-work"
 import { commitUpdate, commitMount } from "../dom/dom-host-config";
-import { Update } from "../utils/type-of-side-effect";
+import { Update, Placement } from "../utils/type-of-side-effect";
 
 export function commitWork(current, finishedWork) {
   switch (finishedWork.tag) {
@@ -27,6 +27,131 @@ export function commitWork(current, finishedWork) {
     case HostText:
       // TODO
       return
+  }
+}
+
+export function commitDeletion(current) {
+  unmountHostComponent(current)
+  detachFiber(current)
+}
+
+function commitNestedUnmounts(root) {
+  let node = root
+  while (true) {
+    commitUnmount(node)
+    if (node.child !== null && node.tag !== HostPortal) {
+      node.child.return = node
+      node = node.child
+      continue
+    }
+
+    if (node === root) return
+
+    while (node.sibling === null) {
+      if (node.return === null || node.return === root) return
+
+      node = node.return
+    }
+
+    node.sibling.return = node.return
+    node = node.sibling
+  }
+}
+
+function commitUnmount(current) {
+  // TODO dev tool onCommitUnmount
+
+  switch (current.tag) {
+    case ClassComponent: {
+      // TODO detach ref
+      const instance = current.stateNode
+      if (typeof instance.componentWillUnmount === 'function') {
+        instance.props = current.memorizedProps
+        instance.state = current.memorizedState
+        instance.componentWillUnmount()
+      }
+      return
+    }
+    case HostComponent: {
+      // TODO detach ref
+      return
+    }
+    case HostPortal: {
+      // TODO
+    }
+  }
+}
+
+function unmountHostComponent(current) {
+  let node = current
+
+  let currentParentIsValid = false
+
+  let currentParent
+  let currentParentIsContainer
+
+  while (true) {
+    if (!currentParentIsValid) {
+      let parent = node.return
+      findParent: while (true) {
+        switch (parent.tag) {
+          case HostComponent:
+            currentParent = parent.stateNode
+            currentParentIsContainer = false
+            break findParent
+          case HostRoot:
+            currentParent = parent.stateNode.containerInfo
+            currentParentIsContainer = true
+            break findParent
+          case HostPortal:
+            currentParent = parent.stateNode.containerInfo
+            currentParentIsContainer = true
+            break findParent
+        }
+        parent = parent.return
+      }
+      currentParentIsValid = true
+    }
+
+    if (node.tag === HostComponent || node.tag === HostText) {
+      commitNestedUnmounts(node)
+
+      if (currentParentIsContainer) {
+        currentParent.removeChild(node.stateNode)
+      } else {
+        currentParent.removeChild(node.stateNode)
+      }
+    } else if (node.tag === HostPortal) {
+      // TODO portal
+    } else {
+      commitUnmount(node)
+
+      if (node.child !== null) {
+        node.child.return = node
+        node = node.child
+        continue
+      }
+
+    }
+    if (node === current) return
+    while (node.sibling === null) {
+      if (node.return === null || node.return === current) return
+      node = node.return
+      if (node.tag === HostPortal) {
+        currentParentIsValid = false
+      }
+    }
+    node.sibling.return = node.return
+    node = node.sibling
+  }
+}
+
+function detachFiber(current) {
+  current.return = null
+  current.child = null
+  if (current.alternate !== null) {
+    current.alternate.return = null
+    current.alternate.child = null
   }
 }
 
@@ -62,7 +187,11 @@ export function commitPlacement(finishedWork) {
   while (true) {
     if (node.tag === HostComponent || node.tag === HostText) {
       if (before) {
-        // TODO insertBefore
+        if (isContainer) {
+          parent.insertBefore(node.stateNode, before)
+        } else {
+          parent.insertBefore(node.stateNode, before)
+        }
       } else {
         if (isContainer) {
           parent.appendChild(node.stateNode)
@@ -75,7 +204,7 @@ export function commitPlacement(finishedWork) {
     } else if (node.tag === HostPortal) {
 
     } else if (node.child !== null) {
-      node.child.return = node.return
+      node.child.return = node
       node = node.child
       continue
     }
@@ -96,7 +225,7 @@ export function commitPlacement(finishedWork) {
 
 function getHostSibling(fiber) {
   let node = fiber
-  while (true) {
+  siblings: while (true) {
     while (node.sibling === null) {
       if (node.return === null || isHostParent(node.return)) {
         return null
@@ -104,7 +233,24 @@ function getHostSibling(fiber) {
       node = node.return
     }
 
-    // TODO find stateNode
+    node.sibling.return = node.return
+    node = node.sibling
+    while (node.tag !== HostComponent && node.tag !== HostText) {
+      if (node.effectTag & Placement) {
+        continue siblings
+      }
+
+      if (node.child === null || node.tag === HostPortal) {
+        continue siblings
+      } else {
+        node.child.return = node
+        node = node.child
+      }
+    }
+
+    if (!(node.effectTag & Placement)) {
+      return node.stateNode
+    }
   }
 }
 

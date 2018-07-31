@@ -1260,11 +1260,20 @@ function trapBubbledEvent(topLevelType) {
   document.addEventListener(topLevelType, dispatch.bind(null, topLevelType), false);
 }
 
+function trapCapturedEvent(topLevelType) {
+  var dispatch = SimpleEventPlugin.isInteractiveTopLevelEventType(topLevelType) ? dispatchInteractiveEvent : dispatchEvent;
+
+  document.addEventListener(topLevelType, dispatch.bind(null, topLevelType), true);
+}
+
 function dispatchInteractiveEvent(topLevelType, nativeEvent) {
   interactiveUpdates(dispatchEvent, topLevelType, nativeEvent);
 }
 
 function dispatchEvent(topLevelType, nativeEvent) {
+  // console.log(topLevelType, nativeEvent.target)
+  // if (topLevelType === 'dblclick') debugger
+
   var target = getEventTarget(nativeEvent);
   var inst = getClosestInstanceFromNode(target);
   // TODO isMounted eg: img onload maybe get an event before committing
@@ -1299,10 +1308,33 @@ function listenTo(registrationName) {
     var dependency = dependencies[i];
 
     if (!(isListening.hasOwnProperty(dependency) && isListening[dependency])) {
-      // TODO some special events
-      var isMediaEvent = mediaEventTypes.indexOf(dependency) !== -1;
-      if (!isMediaEvent) {
-        trapBubbledEvent(dependency);
+      switch (dependency) {
+        case TOP_SCROLL:
+          trapCapturedEvent(TOP_SCROLL);
+          break;
+        case TOP_FOCUS:
+        case TOP_BLUR:
+          trapCapturedEvent(TOP_FOCUS);
+          trapCapturedEvent(TOP_BLUR);
+          isListening[TOP_BLUR] = true;
+          isListening[TOP_FOCUS] = true;
+          break;
+        case TOP_CANCEL:
+        case TOP_CLOSE:
+          if (isEventSupported(dependency)) {
+            trapCapturedEvent(dependency);
+          }
+          break;
+        case TOP_INVALID:
+        case TOP_SUBMIT:
+        case TOP_RESET:
+          break;
+        default:
+          var isMediaEvent = mediaEventTypes.indexOf(dependency) !== -1;
+          if (!isMediaEvent) {
+            trapBubbledEvent(dependency);
+          }
+          break;
       }
       isListening[dependency] = true;
     }
@@ -1311,7 +1343,52 @@ function listenTo(registrationName) {
 
 function isControlled(props) {
   var useChecked = props.type === 'checkbox' || props.type === 'radio';
-  return useChecked ? props.checked !== null : props.value !== null;
+  return useChecked ? props.checked != null : props.value != null;
+}
+
+function setDefaultValue(node, type, value) {
+  if (type !== 'number' || node.ownerDocument.activeElement !== node) {
+    if (value == null) {
+      node.defaultValue = '' + node._wrapperState.initialValue;
+    } else if (node.defaultValue !== '' + value) {
+      node.defaultValue = '' + value;
+    }
+  }
+}
+
+function updateChecked(element, props) {
+  var checked = props.checked;
+  if (checked === false) {
+    element.removeAttribute('checked');
+  } else {
+    element.setAttribute('checked', checked);
+  }
+}
+
+function updateWrapper(element, props) {
+  updateChecked(element, props);
+
+  var value = getSafeValue(props.value);
+
+  if (value != null) {
+    if (props.type === 'number') {
+      if (value === 0 && element.value === '' || element.value != value) {
+        element.value = '' + value;
+      }
+    } else if (element.value !== '' + value) {
+      element.value = '' + value;
+    }
+  }
+
+  if (props.hasOwnProperty('value')) {
+    setDefaultValue(element, props.type, value);
+  } else if (props.hasOwnProperty('defaultValue')) {
+    setDefaultValue(element, props.type, getSafeValue(props.defaultValue));
+  }
+
+  if (props.checked == null && props.defaultChecked != null) {
+    element.defaultChecked = !!props.defaultChecked;
+  }
 }
 
 function getHostProps(element, props) {
@@ -1356,7 +1433,7 @@ function postMountWrapper(element, props) {
     var currentVlaue = node.value;
 
     if (initialValue !== currentVlaue) {
-      node.value = currentVlaue;
+      node.value = initialValue;
     }
 
     node.defaultValue = initialValue;
@@ -1462,6 +1539,9 @@ function updateValueIfChanged(node) {
 }
 
 var DANGEROUSLY_SET_INNER_HTML = 'dangerouslySetInnerHTML';
+var SUPPRESS_CONTENT_EDITABLE_WARNING = 'suppressContentEditableWarning';
+var SUPPRESS_HYDRATION_WARNING = 'suppressHydrationWarning';
+var AUTOFOCUS = 'autoFocus';
 var CHILDREN = 'children';
 var STYLE = 'style';
 var HTML = '__html';
@@ -1565,11 +1645,20 @@ function setInitialDOMProperties(tag, domElement, nextProps) {
       } else if (typeof nextProp === 'number') {
         domElement.textContent = nextProp;
       }
-    } else if (registrationNameModules.hasOwnProperty(propKey)) {
+    } else if (propKey === SUPPRESS_CONTENT_EDITABLE_WARNING || propKey === SUPPRESS_HYDRATION_WARNING) ; else if (propKey === AUTOFOCUS) ; else if (registrationNameModules.hasOwnProperty(propKey)) {
       listenTo(propKey);
     } else if (nextProp != null) {
-      var name = propKey === 'className' ? 'class' : propKey;
+      var name = propKey;
+      if (name === 'className') {
+        name = 'class';
+      } else if (name === 'htmlFor') {
+        name = 'for';
+      }
       var value = nextProp;
+      if (name === 'checked') {
+        domElement[name] = value;
+        continue;
+      }
       if (value === null) {
         domElement.removeAttribute(name);
       } else {
@@ -1584,10 +1673,26 @@ function noop() {}
 
 function diffProperties(domElement, tag, lastRawProps, nextRawProps) {
   var updatePayload = null;
-  // TODO controlled component
 
-  var lastProps = lastRawProps;
-  var nextProps = nextRawProps;
+  var lastProps = void 0;
+  var nextProps = void 0;
+
+  switch (tag) {
+    case 'input':
+      lastProps = getHostProps(domElement, lastRawProps);
+      nextProps = getHostProps(domElement, nextRawProps);
+      updatePayload = [];
+      break;
+    // TODO option select textarea
+    default:
+      lastProps = lastRawProps;
+      nextProps = nextRawProps;
+      if (typeof lastProps.onClick === 'function' && typeof nextProps.onClick === 'function') {
+        trapClickOnNonInteractiveElement(domElement);
+      }
+      break;
+  }
+
   if (typeof lastProps.onClick !== 'function' && typeof nextProps.onClick === 'function') {
     // safari bubble delegate problem
     domElement.onclick = noop;
@@ -1646,11 +1751,18 @@ function diffProperties(domElement, tag, lastRawProps, nextRawProps) {
 }
 
 function updateProperties(domElement, updatePayload, tag, lastRawProps, nextRawProps) {
-  // TODO udate check for input radio
+  if (tag === 'input' && nextRawProps.type === 'radio' && nextRawProps.name !== null) {
+    updateChecked(domElement, nextRawProps);
+  }
 
   updateDOMProperties(domElement, updatePayload);
 
-  // TODO controlled tag eg: input textarea slelect
+  switch (tag) {
+    case 'input':
+      updateWrapper(domElement, nextRawProps);
+      break;
+    // TODO textarea select
+  }
 }
 
 function updateDOMProperties(domElement, updatePayload) {
@@ -1662,6 +1774,24 @@ function updateDOMProperties(domElement, updatePayload) {
     } else if (propKey === CHILDREN) {
       // TODO optimize for get firstchild and set nodevalue is faster
       domElement.textContent = propValue;
+    } else {
+      var name = propKey;
+      if (name === 'className') {
+        name = 'class';
+      } else if (name === 'htmlFor') {
+        name = 'for';
+      }
+      var value = propValue;
+      if (name === 'checked') {
+        domElement[name] = value;
+        continue;
+      }
+      if (value === null) {
+        domElement.removeAttribute(name);
+      } else {
+        // TODO boolean
+        domElement.setAttribute(name, value);
+      }
     }
   }
 }
@@ -1885,7 +2015,72 @@ function ChildReconciler(shouldTrackSideEffects) {
       return resultingFirstFiber;
     }
 
-    // TODO remaining child
+    var existingChildren = mapRemainingChildren(returnFiber, oldFiber);
+
+    for (; newIdx < newChildren.length; newIdx++) {
+      var _newFiber2 = updateFromMap(existingChildren, returnFiber, newIdx, newChildren[newIdx], expirationTime);
+      if (_newFiber2) {
+        if (shouldTrackSideEffects) {
+          if (_newFiber2.alternate !== null) {
+            existingChildren.delete(_newFiber2.key === null ? newIdx : _newFiber2.key);
+          }
+        }
+
+        lastPlacedIndex = placeChild(_newFiber2, lastPlacedIndex, newIdx);
+        if (previousNewFiber === null) {
+          resultingFirstFiber = _newFiber2;
+        } else {
+          previousNewFiber.sibling = _newFiber2;
+        }
+        previousNewFiber = _newFiber2;
+      }
+    }
+
+    if (shouldTrackSideEffects) {
+      existingChildren.forEach(function (child) {
+        return deleteChild(returnFiber, child);
+      });
+    }
+
+    return resultingFirstFiber;
+  }
+
+  function updateFromMap(existingChildren, returnFiber, newIdx, newChild, expirationTime) {
+    if (typeof newChild === 'string' || typeof newChild === 'number') {
+      var matchedFiber = existingChildren.get(newIdx) || null;
+      return updateTextNode(returnFiber, matchedFiber, '' + newChild, expirationTime);
+    }
+
+    if ((typeof newChild === "undefined" ? "undefined" : _typeof(newChild)) === 'object' && newChild !== null) {
+      switch (newChild.$$typeof) {
+        case REACT_ELEMENT_TYPE:
+          {
+            var _matchedFiber = existingChildren.get(newChild.key === null ? newIdx : newChild.key) || null;
+            if (newChild.type === REACT_FRAGMENT_TYPE) ;
+            return updateElement(returnFiber, _matchedFiber, newChild, expirationTime);
+          }
+        // TODO portal
+      }
+
+      // TODO newchild is array cause it is fragment
+    }
+
+    return null;
+  }
+
+  function mapRemainingChildren(returnFiber, currentFirstChild) {
+    var existingChildren = new Map();
+    var existingChild = currentFirstChild;
+    while (existingChild !== null) {
+      if (existingChild.key !== null) {
+        existingChildren.set(existingChild.key, existingChild);
+      } else {
+        existingChildren.set(existingChild.index, existingChild);
+      }
+      existingChild = existingChild.sibling;
+    }
+
+    return existingChildren;
   }
 
   function updateTextNode(returnFiber, current, textContent, expirationTime) {
@@ -2042,8 +2237,8 @@ function finishClassComponent(current, workInProgress, shouldUpdate, hasContext,
   var didCaptureError = (workInProgress.effectTag & DidCapture) !== NoEffect;
 
   if (!shouldUpdate && !didCaptureError) {
-    // TODO bailout
-    return;
+    // TODO context provider
+    return bailoutOnAlreadyFinishedWork(current, workInProgress);
   }
 
   var ctor = workInProgress.type;
@@ -2175,6 +2370,12 @@ var updateHostComponent$1 = function updateHostComponent(current, workInProgress
   }
 };
 
+var updateHostText$1 = function updateHostText(current, workInProgress, oldText, newText) {
+  if (oldText !== newText) {
+    markUpdate(workInProgress);
+  }
+};
+
 function markUpdate(workInProgress) {
   workInProgress.effectTag |= Update;
 }
@@ -2214,7 +2415,10 @@ function completeWork(current, workInProgress, renderExpirationTime) {
       break;
     case HostText:
       var newText = newProps;
-      if (current && workInProgress.stateNode != null) ; else {
+      if (current && workInProgress.stateNode != null) {
+        var oldText = current.memorizedProps;
+        updateHostText$1(current, workInProgress, oldText, newText);
+      } else {
         workInProgress.stateNode = createTextInstance(newText, workInProgress);
       }
       break;
@@ -2243,6 +2447,129 @@ function commitWork(current, finishedWork) {
     case HostText:
       // TODO
       return;
+  }
+}
+
+function commitDeletion(current) {
+  unmountHostComponent(current);
+  detachFiber(current);
+}
+
+function commitNestedUnmounts(root) {
+  var node = root;
+  while (true) {
+    commitUnmount(node);
+    if (node.child !== null && node.tag !== HostPortal) {
+      node.child.return = node;
+      node = node.child;
+      continue;
+    }
+
+    if (node === root) return;
+
+    while (node.sibling === null) {
+      if (node.return === null || node.return === root) return;
+
+      node = node.return;
+    }
+
+    node.sibling.return = node.return;
+    node = node.sibling;
+  }
+}
+
+function commitUnmount(current) {
+  // TODO dev tool onCommitUnmount
+
+  switch (current.tag) {
+    case ClassComponent:
+      {
+        // TODO detach ref
+        var instance = current.stateNode;
+        if (typeof instance.componentWillUnmount === 'function') {
+          instance.props = current.memorizedProps;
+          instance.state = current.memorizedState;
+          instance.componentWillUnmount();
+        }
+        return;
+      }
+    case HostComponent:
+      {
+        // TODO detach ref
+        return;
+      }
+    case HostPortal:
+
+  }
+}
+
+function unmountHostComponent(current) {
+  var node = current;
+
+  var currentParentIsValid = false;
+
+  var currentParent = void 0;
+  var currentParentIsContainer = void 0;
+
+  while (true) {
+    if (!currentParentIsValid) {
+      var parent = node.return;
+      findParent: while (true) {
+        switch (parent.tag) {
+          case HostComponent:
+            currentParent = parent.stateNode;
+            currentParentIsContainer = false;
+            break findParent;
+          case HostRoot:
+            currentParent = parent.stateNode.containerInfo;
+            currentParentIsContainer = true;
+            break findParent;
+          case HostPortal:
+            currentParent = parent.stateNode.containerInfo;
+            currentParentIsContainer = true;
+            break findParent;
+        }
+        parent = parent.return;
+      }
+      currentParentIsValid = true;
+    }
+
+    if (node.tag === HostComponent || node.tag === HostText) {
+      commitNestedUnmounts(node);
+
+      if (currentParentIsContainer) {
+        currentParent.removeChild(node.stateNode);
+      } else {
+        currentParent.removeChild(node.stateNode);
+      }
+    } else if (node.tag === HostPortal) ; else {
+      commitUnmount(node);
+
+      if (node.child !== null) {
+        node.child.return = node;
+        node = node.child;
+        continue;
+      }
+    }
+    if (node === current) return;
+    while (node.sibling === null) {
+      if (node.return === null || node.return === current) return;
+      node = node.return;
+      if (node.tag === HostPortal) {
+        currentParentIsValid = false;
+      }
+    }
+    node.sibling.return = node.return;
+    node = node.sibling;
+  }
+}
+
+function detachFiber(current) {
+  current.return = null;
+  current.child = null;
+  if (current.alternate !== null) {
+    current.alternate.return = null;
+    current.alternate.child = null;
   }
 }
 
@@ -2277,7 +2604,13 @@ function commitPlacement(finishedWork) {
   var node = finishedWork;
   while (true) {
     if (node.tag === HostComponent || node.tag === HostText) {
-      if (before) ; else {
+      if (before) {
+        if (isContainer) {
+          parent.insertBefore(node.stateNode, before);
+        } else {
+          parent.insertBefore(node.stateNode, before);
+        }
+      } else {
         if (isContainer) {
           parent.appendChild(node.stateNode);
           // appendChildToContainer(parent, node.stateNode)
@@ -2287,7 +2620,7 @@ function commitPlacement(finishedWork) {
         }
       }
     } else if (node.tag === HostPortal) ; else if (node.child !== null) {
-      node.child.return = node.return;
+      node.child.return = node;
       node = node.child;
       continue;
     }
@@ -2308,7 +2641,7 @@ function commitPlacement(finishedWork) {
 
 function getHostSibling(fiber) {
   var node = fiber;
-  while (true) {
+  siblings: while (true) {
     while (node.sibling === null) {
       if (node.return === null || isHostParent(node.return)) {
         return null;
@@ -2316,7 +2649,24 @@ function getHostSibling(fiber) {
       node = node.return;
     }
 
-    // TODO find stateNode
+    node.sibling.return = node.return;
+    node = node.sibling;
+    while (node.tag !== HostComponent && node.tag !== HostText) {
+      if (node.effectTag & Placement) {
+        continue siblings;
+      }
+
+      if (node.child === null || node.tag === HostPortal) {
+        continue siblings;
+      } else {
+        node.child.return = node;
+        node = node.child;
+      }
+    }
+
+    if (!(node.effectTag & Placement)) {
+      return node.stateNode;
+    }
   }
 }
 
@@ -2896,7 +3246,7 @@ function commitAllHostEffects() {
         commitWork(current, nextEffect);
         break;
       case Deletion:
-        // TODO
+        commitDeletion(nextEffect);
         break;
     }
 
@@ -3176,8 +3526,8 @@ function isTextInputElement(elem) {
 }
 
 function shouldUseClickEvent(elem) {
-  var nodeName = elem && elem.nodeName && elem.nodeName.toLowerCase();
-  return nodeName && nodeName === 'input' && (elem.type === 'checkbox' || elem.type === 'radio');
+  var nodeName = elem.nodeName;
+  return nodeName && nodeName.toLowerCase() === 'input' && (elem.type === 'checkbox' || elem.type === 'radio');
 }
 
 function getTargetInstForChangeEvent(topLevelType, targetInst) {
@@ -3211,16 +3561,6 @@ function handleControlledInputBlur(node) {
   setDefaultValue(node, 'number', node.value);
 }
 
-function setDefaultValue(node, type, value) {
-  if (type !== 'number' || node.ownerDocument.activeElement !== node) {
-    if (value == null) {
-      node.defaultValue = '' + node._wrapperState.initialValue;
-    } else if (node.defaultValue !== '' + value) {
-      node.defaultValue = '' + value;
-    }
-  }
-}
-
 // not supported for ie 9
 var isInputEventSupported = isEventSupported('input') && (!document.documentMode || document.documentMode > 9);
 
@@ -3241,7 +3581,7 @@ var changeEventPlugin = {
       // } else {
       //   // 2.2 不支持input事件
       // }
-    } else if (shouldUseClickEvent(targetInst)) {
+    } else if (shouldUseClickEvent(targetNode)) {
       // 3. radio checkbox
       getTargetInstFunc = getTargetInstForClickEvent;
     }
@@ -3251,6 +3591,8 @@ var changeEventPlugin = {
     if (getTargetInstFunc) {
       var inst = getTargetInstFunc(topLevelType, targetInst);
       if (inst) {
+        nativeEvent.dispatchConfig = eventTypes$1.change;
+        nativeEvent._targetInst = targetInst;
         enqueueStateRestore(nativeEventTarget);
         accumulateTwoPhaseDispatches(nativeEvent);
         return nativeEvent;
@@ -3706,7 +4048,7 @@ var ToDoList = function (_React$Component) {
   createClass(ToDoList, [{
     key: 'checkForAllCompleted',
     value: function checkForAllCompleted(list) {
-      var isAllCompleted = true;
+      var isAllCompleted = list && list.length > 0 ? true : false;
       list.forEach(function (item) {
         if (!item.isCompleted) isAllCompleted = false;
       });

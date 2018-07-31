@@ -40,6 +40,12 @@ let updateHostComponent = function(
   }
 }
 
+let updateHostText = function(current, workInProgress, oldText, newText) {
+  if (oldText !== newText) {
+    markUpdate(workInProgress)
+  }
+}
+
 function markUpdate(workInProgress) {
   workInProgress.effectTag |= Update
 }
@@ -91,7 +97,8 @@ export function completeWork(current, workInProgress, renderExpirationTime) {
     case HostText:
       let newText = newProps
       if (current && workInProgress.stateNode != null) {
-        // TODO compare
+        const oldText = current.memorizedProps
+        updateHostText(current, workInProgress, oldText, newText)
       } else {
         workInProgress.stateNode = createTextInstance(
           newText,
