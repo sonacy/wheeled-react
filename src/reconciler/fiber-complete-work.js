@@ -1,7 +1,7 @@
 import { FunctionalComponent, ClassComponent, HostRoot, HostComponent, HostText, HostPortal } from "../utils/type-of-work"
 import { createTextInstance, createInstance, appendInitialChild, finalizeInitialChildren } from '../dom/dom-host-config'
 import { diffProperties } from "../dom/dom-fiber-component";
-import { Update } from "../utils/type-of-side-effect";
+import { Update, Ref } from "../utils/type-of-side-effect";
 
 function appendAllChildren(parent, workInProgress) {
   let node = workInProgress.child
@@ -91,7 +91,10 @@ export function completeWork(current, workInProgress, renderExpirationTime) {
           markUpdate(workInProgress)
         }
         workInProgress.stateNode = instance
-        // TODO ref
+
+        if (workInProgress.ref !== null) {
+          workInProgress.effectTag |= Ref
+        }
       }
       break
     case HostText:
