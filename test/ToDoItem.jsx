@@ -3,7 +3,7 @@ import './ToDoList.css'
 
 class ToDoItem extends React.Component {
 
-  // inputRef = React.createRef()
+  inputRef = React.createRef()
 
   state = {
     edit: false
@@ -17,9 +17,9 @@ class ToDoItem extends React.Component {
     if (!this.state.edit) {
       this.setState({
         edit: true
-      }/*, () => {
+      }, () => {
         this.inputRef.current.focus()
-      }*/)
+      })
     }
   }
 
@@ -73,7 +73,7 @@ class ToDoItem extends React.Component {
           <label>{item.value}</label>
           <button onDoubleClick={this.stop} className="destroy" onClick={this.deleteItem}></button>
         </div>
-        <input /*ref={this.inputRef}*/ onKeyUp={this.handleEnter} onBlur={this.handleSubmit} className="edit" defaultValue={item.value} />
+        <input ref={this.inputRef} onKeyUp={this.handleEnter} onBlur={this.handleSubmit} className="edit" defaultValue={item.value} />
       </li>
     )
   }

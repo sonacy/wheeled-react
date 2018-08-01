@@ -27,6 +27,12 @@ export function cloneChildFibers(current, workInProgress) {
   newChild.sibling = null
 }
 
+function coerceRef(returnFiber, current, element) {
+  let mixdRef = element.ref
+  // warn for ref is not a function or object
+  return mixdRef
+}
+
 function ChildReconciler(shouldTrackSideEffects) {
 
   function createChild(returnFiber, newChild, expirationTime) {
@@ -49,7 +55,7 @@ function ChildReconciler(shouldTrackSideEffects) {
             returnFiber.mode,
             expirationTime
           )
-          // TODO ref
+          created.ref = coerceRef(returnFiber, null, newChild)
           created.return = returnFiber
           return created
           break
@@ -105,7 +111,7 @@ function ChildReconciler(shouldTrackSideEffects) {
             element.type === REACT_FRAGMENT_TYPE ? element.props.children : element.props,
             expirationTime
           )
-          // TODO ref
+          existing.ref = coerceRef(returnFiber, child, element)
           existing.return = returnFiber
           return existing
         } else {
@@ -125,14 +131,28 @@ function ChildReconciler(shouldTrackSideEffects) {
         returnFiber.mode,
         expirationTime
       )
-      // TODO ref
+      created.ref = coerceRef(returnFiber, currentFirstChild, element)
       created.return = returnFiber
       return created
     }
   }
 
-  function reconcileSingleTextNode() {
-    // TODO
+  function reconcileSingleTextNode(returnFiber, currentFirstChild, textContent, expirationTime) {
+    if (currentFirstChild !== null && currentFirstChild.tag === HostText) {
+      deleteRemainingChildren(returnFiber, currentFirstChild.sibling)
+      const existing = useFiber(currentFirstChild, textContent, expirationTime)
+      existing.return = returnFiber
+      return existing
+    }
+
+    deleteRemainingChildren(returnFiber, currentFirstChild)
+    const created = createFiberFromText(
+      textContent,
+      returnFiber.mode,
+      expirationTime
+    )
+    created.return = returnFiber
+    return created
   }
 
   function reconcileChildrenArray(returnFiber, currentFirstChild, newChildren, expirationTime) {
@@ -311,11 +331,12 @@ function ChildReconciler(shouldTrackSideEffects) {
   function updateElement(returnFiber, current, element, expirationTime) {
     if (current !== null && current.type === element.type) {
       const existing = useFiber(current, element.props, expirationTime)
+      existing.ref = coerceRef(returnFiber, current, element)
       existing.return = returnFiber
       return existing
     } else {
       const created = createFiberFromElement(element, returnFiber.mode, expirationTime)
-      // TODO ref
+      created.ref = coerceRef(returnFiber, current, element)
       created.return = returnFiber
       return created
     }

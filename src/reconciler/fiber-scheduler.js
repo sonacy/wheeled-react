@@ -5,9 +5,9 @@ import { HostRoot, ClassComponent } from '../utils/type-of-work'
 import { createWorkInProgress } from './fiber'
 import ReactCurrentOwner from '../current-owner'
 import { beginWork } from './fiber-begin-work'
-import { Incomplete, NoEffect, PerformedWork, Placement, Update, Deletion, PlacementAndUpdate, Callback, Snapshot } from '../utils/type-of-side-effect'
+import { Incomplete, NoEffect, PerformedWork, Placement, Update, Deletion, PlacementAndUpdate, Callback, Snapshot, Ref } from '../utils/type-of-side-effect'
 import { completeWork } from './fiber-complete-work'
-import { commitPlacement, commitLifeCycles, commitWork, commitDeletion} from './fiber-commit-work'
+import { commitPlacement, commitLifeCycles, commitWork, commitDeletion, commitAttachRef, commitDetachRef} from './fiber-commit-work'
 import { markPendingPriorityLevel, markCommittedPriorityLevels } from './fiber-pending-priority'
 
 let expirationContext = NoWork
@@ -411,7 +411,13 @@ function commitAllHostEffects() {
     const effectTag = nextEffect.effectTag
 
     // TODO contentreset
-    // TODO ref
+
+    if (effectTag & Ref) {
+      const current = nextEffect.alternate
+      if (current !== null) {
+        commitDetachRef(current)
+      }
+    }
 
     const primaryEffectTag = effectTag & (Placement | Update | Deletion)
     switch (primaryEffectTag) {
@@ -451,7 +457,9 @@ function commitAllLifeCycles(finishedRoot, committedExpirationTime) {
       )
     }
 
-    // TODO ref
+    if (effectTag & Ref) {
+      commitAttachRef(nextEffect)
+    }
 
     const next = nextEffect.nextEffect
     nextEffect.nextEffect = null

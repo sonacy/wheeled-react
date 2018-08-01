@@ -2,6 +2,29 @@ import { HostComponent, HostRoot, HostPortal, HostText, ClassComponent } from ".
 import { commitUpdate, commitMount } from "../dom/dom-host-config";
 import { Update, Placement } from "../utils/type-of-side-effect";
 
+export function commitAttachRef(finishedWork) {
+  const ref = finishedWork.ref
+  if (ref !== null) {
+    const instance = finishedWork.stateNode
+    if (typeof ref === 'function') {
+      ref(instance)
+    } else {
+      ref.current = instance
+    }
+  }
+}
+
+export function commitDetachRef(current) {
+  const currentRef = current.ref
+  if (currentRef !== null) {
+    if (typeof currentRef === 'function') {
+      currentRef(null)
+    } else {
+      currentRef.current = null
+    }
+  }
+}
+
 export function commitWork(current, finishedWork) {
   switch (finishedWork.tag) {
     case HostComponent:
@@ -63,7 +86,7 @@ function commitUnmount(current) {
 
   switch (current.tag) {
     case ClassComponent: {
-      // TODO detach ref
+      commitDetachRef(current)
       const instance = current.stateNode
       if (typeof instance.componentWillUnmount === 'function') {
         instance.props = current.memorizedProps
@@ -73,7 +96,7 @@ function commitUnmount(current) {
       return
     }
     case HostComponent: {
-      // TODO detach ref
+      commitDetachRef(current)
       return
     }
     case HostPortal: {

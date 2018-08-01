@@ -1,6 +1,6 @@
 import { FunctionalComponent, IndeterminateComponent, ClassComponent, HostRoot, HostComponent, HostText } from "../utils/type-of-work"
 import { processUpdateQueue } from './update-queue'
-import { DidCapture, NoEffect, PerformedWork } from "../utils/type-of-side-effect"
+import { DidCapture, NoEffect, PerformedWork, Ref } from "../utils/type-of-side-effect"
 import ReactCurrentOwner from '../current-owner'
 import { constructClassInstance, mountClassInstance, updateClassInstance } from './fiber-class-component'
 import { shouldSetTextContent } from '../dom/dom-host-config'
@@ -69,8 +69,16 @@ function updateClassComponent(current, workInProgress, renderExpirationTime) {
   return finishClassComponent(current, workInProgress, shouldUpdate, hasContext, renderExpirationTime)
 }
 
+function markRef(current, workInProgress) {
+  const ref = workInProgress.ref
+  if ((current === null && ref !== null) || (current !== null && current.ref !== ref)) {
+    workInProgress.effectTag |= Ref
+  }
+}
+
 function finishClassComponent(current, workInProgress, shouldUpdate, hasContext, renderExpirationTime) {
-  // TODO ref
+  markRef(current, workInProgress)
+
   const didCaptureError = (workInProgress.effectTag & DidCapture) !== NoEffect
 
   if (!shouldUpdate && !didCaptureError) {
@@ -152,7 +160,7 @@ function updateHostComponent(current, workInProgress, renderExpirationTime) {
   }
   // TODO switching from a direct text child to a normal child, contentReset
 
-  // TODO ref
+  markRef(current, workInProgress)
 
   // TODO check for offscreen
 
