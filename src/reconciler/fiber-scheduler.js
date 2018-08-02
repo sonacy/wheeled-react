@@ -1,4 +1,4 @@
-import {msToExpirationTime, NoWork, Never, Sync} from './fiber-expiration-time'
+import {msToExpirationTime, NoWork, Never, Sync, computeAsyncExpiration, computeInteractiveExpiration, expirationTimeToMs} from './fiber-expiration-time'
 import { now } from '../scheduler'
 import { AsyncMode } from './type-of-mode'
 import { HostRoot, ClassComponent } from '../utils/type-of-work'
@@ -52,7 +52,15 @@ function computeExpirationForFiber(currentTime, fiber) {
     }
   } else {
     if (fiber.mode & AsyncMode) {
-      // TODO
+      if (isBatchingInteractiveUpdates) {
+        expirationTime = computeInteractiveExpiration(currentTime)
+      } else {
+        expirationTime = computeAsyncExpiration(currentTime)
+      }
+
+      if (nextRoot !== null && expirationTime === nextRenderExpirationTime) {
+        expirationTime += 1
+      }
     } else {
       expirationTime = Sync
     }
@@ -87,10 +95,14 @@ function scheduleWork(fiber, expirationTime) {
 let firstScheduledRoot = null
 let lastScheduledRoot = null
 
+let callbackExpirationTime = NoWork
+let callbackID
+
 let isRendering = false
 let nextFlushedRoot = null
 let nextFlushedExpirationTime = NoWork
 let lowestPendingInteractiveExpirationTime = NoWork
+let deadlineDidExpire = false
 let deadline = null
 
 let isBatchingUpdates = false
@@ -144,8 +156,20 @@ function findHighestPriorityRoot() {
           root.nextScheduledRoot = null
           firstScheduledRoot = lastScheduledRoot = null
           break
+        } else if (root = firstScheduledRoot) {
+          const next = root.nextScheduledRoot
+          firstScheduledRoot = next
+          lastScheduledRoot.nextScheduledRoot = next
+          root.nextScheduledRoot = null
+        } else if (root === lastScheduledRoot) {
+          lastScheduledRoot = previousScheduledRoot
+          lastScheduledRoot.nextScheduledRoot = firstScheduledRoot
+          root.nextScheduledRoot = null
+          break
+        } else {
+          previousScheduledRoot.nextScheduledRoot = root.nextScheduledRoot
+          root.nextScheduledRoot = null
         }
-        // TODO fist root and last root and else
       } else {
         if (highestPriorityWork === NoWork || remainingExpirationTime < highestPriorityWork) {
           highestPriorityRoot = root
@@ -168,11 +192,32 @@ function performSyncWork() {
   performWork(Sync, null)
 }
 
+function performAsyncWork(dl) {
+  performWork(NoWork, dl)
+}
+
 function performWork(minExpirationTime, dl) {
   deadline = dl
   findHighestPriorityRoot()
-  if (deadline) {
-    // TODO
+  if (deadline !== null) {
+    recomputeCurrentRenderedTimer()
+    currentSchedulerTime = currentRendererTime
+
+    while (
+      nextFlushedRoot !== null &&
+      nextFlushedExpirationTime !== NoWork &&
+      (minExpirationTime === NoWork || minExpirationTime >= nextFlushedExpirationTime) &&
+      (!deadlineDidExpire || currentRendererTime >= nextFlushedExpirationTime)
+    ) {
+      performWorkOnRoot(
+        nextFlushedRoot,
+        nextFlushedExpirationTime,
+        currentRendererTime >= nextFlushedExpirationTime
+      )
+      findHighestPriorityRoot()
+      recomputeCurrentRenderedTimer()
+      currentSchedulerTime = currentRendererTime
+    }
   } else {
     while (nextFlushedRoot !== null &&
       nextFlushedExpirationTime !== NoWork
@@ -183,7 +228,17 @@ function performWork(minExpirationTime, dl) {
     }
   }
 
+  if (deadline !== null) {
+    callbackExpirationTime = NoWork
+    callbackID = null
+  }
+
+  if (nextFlushedExpirationTime !== NoWork) {
+    scheduleCallbackWithExpirationTime(nextFlushedExpirationTime)
+  }
+
   deadline = null
+  deadlineDidExpire = false
 
   finishRendering()
 }
@@ -211,10 +266,40 @@ function performWorkOnRoot(root, expirationTime, isExpired) {
       }
     }
   } else {
-    // TODO flush async work
+    let finishedWork = root.finishedWork
+    if (finishedWork !== null) {
+      completeRoot(root, finishedWork, expirationTime)
+    } else {
+      root.finishedWork = null
+
+      // TODO suspend ,clear timeout
+
+      renderRoot(root, true, isExpired)
+      finishedWork = root.finishedWork
+      if (finishedWork !== null) {
+        if (!shouldYield()) {
+          completeRoot(root, finishedWork, expirationTime)
+        } else {
+          root.finishedWork = finishedWork
+        }
+      }
+    }
   }
 
   isRendering = false
+}
+
+function shouldYield() {
+  if (deadlineDidExpire) {
+    return true
+  }
+
+  if (deadline === null || deadline.timeRemaining() > 1) {
+    return false
+  }
+
+  deadlineDidExpire = true
+  return true
 }
 
 function resetStack() {
@@ -273,7 +358,9 @@ function workLoop(isYieldy) {
       nextUnitOfWork = performUnitOfWork(nextUnitOfWork)
     }
   } else {
-    // TODO async work
+    while (nextUnitOfWork !== null && !shouldYield()) {
+      nextUnitOfWork = performUnitOfWork(nextUnitOfWork)
+    }
   }
 }
 
@@ -563,10 +650,15 @@ function addRootToSchedule(root, expirationTime) {
       firstScheduledRoot = lastScheduledRoot = root
       root.nextScheduledRoot = root
     } else {
-      // TODO
+      lastScheduledRoot.nextScheduledRoot = root
+      lastScheduledRoot = root
+      lastScheduledRoot.nextScheduledRoot = firstScheduledRoot
     }
   } else {
-    // TODO
+    const remainingExpirationTime = root.expirationTime
+    if (remainingExpirationTime === NoWork || expirationTime < remainingExpirationTime) {
+      root.expirationTime = expirationTime
+    }
   }
 }
 
@@ -586,8 +678,26 @@ function requestWork(root, expirationTime) {
   if (expirationTime === Sync) {
     performSyncWork()
   } else {
-    // scheduleCallbackWithExpirationTime(expirationTime)
+    scheduleCallbackWithExpirationTime(expirationTime)
   }
+}
+
+function scheduleCallbackWithExpirationTime(expirationTime) {
+  if (callbackExpirationTime !== NoWork) {
+    if (expirationTime > callbackExpirationTime) {
+      return
+    } else {
+      if (callbackID !== null) {
+        cancelIdleCallback(callbackID)
+      }
+    }
+  }
+
+  callbackExpirationTime = expirationTime
+  const currentMs = now() - originalStartTimeMs
+  const expirationTimeMs = expirationTimeToMs(expirationTime)
+  const timeout = expirationTimeMs - currentMs
+  callbackID = requestIdleCallback(performAsyncWork, { timeout })
 }
 
 function unbatchedUpdates(fn, a) {

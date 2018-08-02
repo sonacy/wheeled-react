@@ -80,7 +80,7 @@ function legacyCreateRootFromDOMContainer(container, forceHydrate) {
       container.removeChild(rootSibling)
     }
   }
-  const isAsync = false
+  const isAsync = true
   return new ReactRoot(container, isAsync, forceHydrate)
 }
 
