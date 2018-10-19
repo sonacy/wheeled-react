@@ -215,7 +215,10 @@ function performSyncWork() {
 }
 
 function performAsyncWork(dl) {
+<<<<<<< HEAD
 
+=======
+>>>>>>> 451173ab52ba8ece61e5647cd7e8eaa2f550666b
   performWork(NoWork, dl)
 }
 
@@ -702,7 +705,28 @@ function requestWork(root, expirationTime) {
     performSyncWork()
   } else {
     scheduleCallbackWithExpirationTime(expirationTime)
+<<<<<<< HEAD
+=======
   }
+}
+
+function scheduleCallbackWithExpirationTime(expirationTime) {
+  if (callbackExpirationTime !== NoWork) {
+    if (expirationTime > callbackExpirationTime) {
+      return
+    } else {
+      if (callbackID !== null) {
+        cancelIdleCallback(callbackID)
+      }
+    }
+>>>>>>> 451173ab52ba8ece61e5647cd7e8eaa2f550666b
+  }
+
+  callbackExpirationTime = expirationTime
+  const currentMs = now() - originalStartTimeMs
+  const expirationTimeMs = expirationTimeToMs(expirationTime)
+  const timeout = expirationTimeMs - currentMs
+  callbackID = requestIdleCallback(performAsyncWork, { timeout })
 }
 
 function scheduleCallbackWithExpirationTime(expirationTime) {
