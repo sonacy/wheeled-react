@@ -1,4 +1,4 @@
-import { FunctionalComponent, IndeterminateComponent, ClassComponent, HostRoot, HostComponent, HostText } from "../utils/type-of-work"
+import { FunctionalComponent, IndeterminateComponent, ClassComponent, HostRoot, HostComponent, HostText, Mode } from "../utils/type-of-work"
 import { processUpdateQueue } from './update-queue'
 import { DidCapture, NoEffect, PerformedWork, Ref } from "../utils/type-of-side-effect"
 import ReactCurrentOwner from '../current-owner'
@@ -180,6 +180,18 @@ function updateHostText(current, workInProgress) {
   return null
 }
 
+function updateMode(current, workInProgress, renderExpirationTime) {
+  const children = workInProgress.pendingProps.children
+  reconcileChildrenAtExpirationTime(
+    current,
+    workInProgress,
+    children,
+    renderExpirationTime
+  )
+  memorizeProps(workInProgress, nextChildren)
+  return workInProgress.child
+}
+
 function beginWork(current, workInProgress, renderExpirationTime) {
   switch (workInProgress.tag) {
     case IndeterminateComponent:
@@ -215,6 +227,12 @@ function beginWork(current, workInProgress, renderExpirationTime) {
         workInProgress
       )
       break
+    case Mode:
+      return updateMode(
+        current,
+        workInProgress,
+        renderExpirationTime
+      )
     default:
       console.log('unknow tag: ', workInProgress.tag)
       break

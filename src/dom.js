@@ -1,5 +1,6 @@
 import * as DOMRenderer from './reconciler/fiber-reconciler'
 import './dom/dom-client-injection'
+import { batchedUpdates, deferredUpdates, interactiveUpdates, flushSync, flushControlled } from './reconciler/fiber-scheduler'
 
 class ReactWork {
   constructor() {
@@ -154,7 +155,15 @@ const ReactDom = {
       false,
       callback
     )
-  }
+  },
+  unstable_createRoot(container, options) {
+    return new ReactRoot(container, true, false)
+  },
+  unstable_batchedUpdates: batchedUpdates,
+  unstable_deferredUpdates: deferredUpdates,
+  unstable_interactiveUpdates: interactiveUpdates,
+  flushSync: flushSync,
+  unstable_flushControlled: flushControlled
 }
 
 export default ReactDom

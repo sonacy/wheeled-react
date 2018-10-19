@@ -1,4 +1,4 @@
-import { FunctionalComponent, ClassComponent, HostRoot, HostComponent, HostText, HostPortal } from "../utils/type-of-work"
+import { FunctionalComponent, ClassComponent, HostRoot, HostComponent, HostText, HostPortal, Mode } from "../utils/type-of-work"
 import { createTextInstance, createInstance, appendInitialChild, finalizeInitialChildren } from '../dom/dom-host-config'
 import { diffProperties } from "../dom/dom-fiber-component";
 import { Update, Ref } from "../utils/type-of-side-effect";
@@ -108,6 +108,8 @@ export function completeWork(current, workInProgress, renderExpirationTime) {
           workInProgress
         )
       }
+      break
+    case Mode:
       break
     // TODO others
     default:

@@ -1,7 +1,8 @@
 import {NoEffect} from '../utils/type-of-side-effect'
 import {NoWork} from './fiber-expiration-time'
-import {HostRoot, HostText, ClassComponent, IndeterminateComponent, HostComponent} from '../utils/type-of-work'
+import {HostRoot, HostText, ClassComponent, IndeterminateComponent, HostComponent, Mode} from '../utils/type-of-work'
 import {AsyncMode, StrictMode, NoContext} from './type-of-mode'
+import { REACT_ASYNC_MODE_TYPE } from '../utils/symbols';
 
 class FiberNode {
   constructor(tag, pendingProps, key, mode) {
@@ -97,6 +98,9 @@ export function createFiberFromElement(element, mode, expirationTime) {
     fiberTag = shouldConstruct(type) ? ClassComponent : IndeterminateComponent
   } else if (typeof type === 'string') {
     fiberTag = HostComponent
+  } else if (type === REACT_ASYNC_MODE_TYPE) {
+    fiberTag = Mode
+    mode |= AsyncMode | StrictMode
   }
 
   // TODO frament and so on
